@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>CITRO — Sistema de Trámites v3</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
 <style>
 :root{
   --navy:#0D1F3C; --navy2:#16325A; --teal:#0A7A6E; --teal2:#0DB8A8;
@@ -333,6 +334,7 @@ tbody td{padding:9px 12px;font-size:.8rem;vertical-align:middle}
   animation:checkPop .5s .1s both cubic-bezier(.34,1.56,.64,1);
 }
 @keyframes checkPop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
 .acuse-ttl{
   font-size:1.22rem;font-weight:700;color:#fff;
   margin-bottom:4px;position:relative;z-index:1;
@@ -391,15 +393,19 @@ tbody td{padding:9px 12px;font-size:.8rem;vertical-align:middle}
 <div class="acuse-overlay" id="acuse-overlay">
   <div class="acuse-box">
     <div class="acuse-top">
-      <div class="acuse-check">&#10003;</div>
-      <div class="acuse-ttl">Tramite enviado con exito</div>
+      <div class="acuse-check" id="acuse-icon">&#10003;</div>
+      <div class="acuse-ttl">Solicitud registrada</div>
       <div class="acuse-sub">Acuse de recibo - CITRO / Universidad Veracruzana</div>
     </div>
     <div class="acuse-body">
+
+      <!-- Folio -->
       <div class="acuse-folio-block">
         <div class="acuse-folio-num" id="acuse-folio-num">--</div>
         <div class="acuse-folio-lbl">Numero de folio asignado</div>
       </div>
+
+      <!-- Datos -->
       <div class="acuse-rows">
         <div class="acuse-row"><span class="k">Tipo de tramite</span><span class="v" id="acuse-tipo">--</span></div>
         <div class="acuse-row"><span class="k">Solicitante</span><span class="v" id="acuse-solicitante">--</span></div>
@@ -407,19 +413,63 @@ tbody td{padding:9px 12px;font-size:.8rem;vertical-align:middle}
         <div class="acuse-row"><span class="k">Fecha de registro</span><span class="v" id="acuse-fecha">--</span></div>
         <div class="acuse-row"><span class="k">Archivos adjuntos</span><span class="v" id="acuse-adjuntos">Ninguno</span></div>
       </div>
-      <div class="acuse-email-box">
-        <span class="ico">&#128231;</span>
-        <span>Se ha enviado una copia del formulario y los adjuntos a <strong>CtTramites2026</strong> para su proceso administrativo. Conserve este numero de folio como comprobante.</span>
+
+      <!-- Estado de correos -->
+      <div id="acuse-email-status" style="margin:14px 0 0;display:flex;flex-direction:column;gap:7px">
+        <div id="acuse-st-citro" style="display:flex;align-items:center;gap:9px;background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:9px 12px">
+          <span id="acuse-st-citro-ico" style="font-size:1rem">&#9711;</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.76rem;font-weight:600;color:var(--text)">CtTramites2026@uvmx.onmicrosoft.com</div>
+            <div id="acuse-st-citro-txt" style="font-size:.7rem;color:var(--muted)">Preparando...</div>
+          </div>
+        </div>
+        <div id="acuse-st-sol" style="display:flex;align-items:center;gap:9px;background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:9px 12px">
+          <span id="acuse-st-sol-ico" style="font-size:1rem">&#9711;</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.76rem;font-weight:600;color:var(--text)" id="acuse-st-sol-dest">Solicitante</div>
+            <div id="acuse-st-sol-txt" style="font-size:.7rem;color:var(--muted)">Preparando...</div>
+          </div>
+        </div>
       </div>
-      <div class="acuse-adj-box" id="acuse-adj-box" style="display:none">
+
+      <!-- Lista adjuntos -->
+      <div class="acuse-adj-box" id="acuse-adj-box" style="display:none;margin-top:10px">
         <span>&#128206;</span>
         <span id="acuse-adj-lista"></span>
       </div>
+
+      <!-- ZIP -->
+      <div style="margin:12px 0 0;background:linear-gradient(135deg,rgba(10,122,110,.07),rgba(10,122,110,.03));border:1px solid rgba(10,122,110,.22);border-radius:var(--r2);padding:12px 14px">
+        <div style="font-size:.76rem;font-weight:700;color:var(--teal);margin-bottom:8px">&#128230; Paquete de entrega</div>
+        <div style="font-size:.74rem;color:var(--muted);margin-bottom:8px" id="acuse-zip-desc">Formulario + adjuntos en un solo archivo.</div>
+        <button class="btn btn-primary btn-sm" id="btn-download-zip" onclick="descargarPaqueteZip()" style="width:100%;justify-content:center;padding:9px">
+          &#8595; Descargar paquete .zip
+        </button>
+        <div id="zip-progress" style="display:none;margin-top:6px;font-size:.72rem;color:var(--muted);text-align:center"></div>
+      </div>
+
+      <!-- Reenviar manualmente -->
+      <div style="margin:10px 0 0;background:rgba(27,95,168,.04);border:1px solid rgba(27,95,168,.16);border-radius:var(--r2);padding:12px 14px">
+        <div style="font-size:.74rem;font-weight:700;color:var(--blue);margin-bottom:7px">&#128231; Reenviar correos</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="manualCorreoCITRO()" style="flex:1;min-width:130px;justify-content:center;padding:8px;font-size:.74rem">
+            &#127970; A CtTramites2026
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="manualAcuseSolicitante()" style="flex:1;min-width:130px;justify-content:center;padding:8px;font-size:.74rem">
+            &#128231; Acuse al solicitante
+          </button>
+        </div>
+        <div style="margin-top:7px;font-size:.69rem;color:var(--muted);line-height:1.5">
+          Abre tu cliente de correo (Outlook / Gmail) con los campos ya llenados. Adjunta el .zip antes de enviar.
+        </div>
+      </div>
+
     </div>
-    <div class="acuse-btns">
-      <button class="btn btn-primary" onclick="acuseImprimir()">&#128247; Imprimir acuse</button>
-      <button class="btn btn-secondary" onclick="acuseNuevo()">+ Nuevo tramite</button>
-      <button class="btn btn-ghost" onclick="cerrarAcuse()">Cerrar</button>
+
+    <div class="acuse-btns" style="padding:12px 24px 18px;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="acuseImprimir()" style="flex:1;justify-content:center">&#128247; Imprimir</button>
+      <button class="btn btn-secondary btn-sm" onclick="acuseNuevo()" style="flex:1;justify-content:center">+ Nuevo</button>
+      <button class="btn btn-ghost btn-sm" onclick="cerrarAcuse()" style="flex:1;justify-content:center">Cerrar</button>
     </div>
     <div class="acuse-ts" id="acuse-ts"></div>
   </div>
@@ -432,15 +482,34 @@ tbody td{padding:9px 12px;font-size:.8rem;vertical-align:middle}
   <div class="login-box">
     <div class="login-emblem">C</div>
     <h2>CITRO — Sistema de Trámites</h2>
-    <p>Inicie sesión con su cuenta institucional UV<br>para acceder al portal de solicitudes.</p>
-    <div id="google-btn-wrap"></div>
-    <div class="login-divider">o continúe sin cuenta</div>
+    <p>Ingrese su correo institucional UV<br>para acceder al portal de solicitudes.</p>
+
+    <div style="margin-bottom:10px">
+      <label style="display:block;font-size:.75rem;color:rgba(255,255,255,.5);margin-bottom:5px;text-align:left">Nombre completo</label>
+      <input type="text" id="login-nombre" placeholder="Dr. / M.C. / Lic. Nombre Apellido"
+        style="width:100%;padding:10px 13px;border-radius:8px;border:1px solid rgba(255,255,255,.15);
+        background:rgba(255,255,255,.08);color:#fff;font-size:.88rem;font-family:inherit;outline:none"
+        onkeydown="if(event.key==='Enter') document.getElementById('login-email').focus()"/>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:.75rem;color:rgba(255,255,255,.5);margin-bottom:5px;text-align:left">Correo institucional UV <span style="color:rgba(255,255,255,.3)">(@uv.mx o @estudiantes.uv.mx)</span></label>
+      <input type="email" id="login-email" placeholder="usuario@uv.mx"
+        style="width:100%;padding:10px 13px;border-radius:8px;border:1px solid rgba(255,255,255,.15);
+        background:rgba(255,255,255,.08);color:#fff;font-size:.88rem;font-family:inherit;outline:none"
+        onkeydown="if(event.key==='Enter') doEmailLogin()"/>
+    </div>
+
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px" onclick="doEmailLogin()">
+      &#8594; Entrar al sistema
+    </button>
+
+    <div class="login-divider">o continúe sin registrar correo</div>
     <button class="btn btn-ghost" style="width:100%;justify-content:center" onclick="loginOffline()">
-      Continuar sin Google Drive ↗
+      Continuar sin cuenta
     </button>
     <div class="login-note">
-      Al iniciar sesión sus trámites se guardan automáticamente<br>
-      en Google Drive y en la hoja de registro del CITRO.
+      Correos @uv.mx tienen acceso completo al sistema.<br>
+      Los administradores autorizados verán el Panel Admin.
     </div>
     <div class="login-error" id="loginError"></div>
   </div>
@@ -607,7 +676,7 @@ tbody td{padding:9px 12px;font-size:.8rem;vertical-align:middle}
               <div class="field"><label>Nombre(s)<span class="req">*</span></label><input type="text" id="pg-nombres" placeholder="Alejandro"/></div>
               <div class="field"><label>Matrícula UV<span class="req">*</span></label><input type="text" id="pg-matricula" placeholder="S23XXXXXX" maxlength="10"/></div>
               <div class="field"><label>Correo institucional<span class="req">*</span></label><input type="email" id="pg-correo" placeholder="s23xxx@estudiantes.uv.mx"/></div>
-              <div class="field col2"><label>Programa académico<span class="req">*</span></label><select id="pg-programa"><option value="">— Seleccione —</option><option>Maestría en Ciencias Biológicas</option><option>Maestría en Ecología y Manejo de Recursos</option><option>Doctorado en Ciencias Biológicas y Agropecuarias</option><option>Doctorado en Ecología Tropical</option><option>Otro</option></select></div>
+              <div class="field col2"><label>Programa académico<span class="req">*</span></label><select id="pg-programa"><option value="">— Seleccione —</option><optgroup label="Posgrado"><option>Maestría en Ciencias Biológicas</option><option>Maestría en Ecología y Manejo de Recursos</option><option>Doctorado en Ciencias Biológicas y Agropecuarias</option><option>Doctorado en Ecología Tropical</option></optgroup><optgroup label="Categoría"><option>Académico</option><option>Posdoctorante</option><option>Técnico Académico</option></optgroup><optgroup label="Otro"><option>Otro</option></optgroup></select></div>
               <div class="field col2"><label>Director(a) de tesis</label><input type="text" id="pg-director" placeholder="Dr./Dra. Nombre Completo"/></div>
             </div></div></div>
             <div class="section-block"><div class="section-head"><span class="section-tag" style="background:var(--purple)">02</span><h4>Datos de la Petición General</h4></div><div class="section-body"><div class="fields">
@@ -655,7 +724,7 @@ tbody td{padding:9px 12px;font-size:.8rem;vertical-align:middle}
             <div class="section-block"><div class="section-head"><span class="section-tag" style="background:var(--teal)">01</span><h4>Identificación del Solicitante</h4></div><div class="section-body"><div class="fields">
               <div class="field"><label>Apellido(s)<span class="req">*</span></label><input type="text" id="sc-apellidos" placeholder="García Morales"/></div>
               <div class="field"><label>Nombre(s)<span class="req">*</span></label><input type="text" id="sc-nombres" placeholder="Alejandro"/></div>
-              <div class="field"><label>Grado académico<span class="req">*</span></label><select id="sc-grado"><option value="">— Grado —</option><option>Lic.</option><option>Ing.</option><option>M.C.</option><option>M.S.</option><option>Dr.</option><option>Dra.</option></select></div>
+              <div class="field"><label>Grado académico<span class="req">*</span></label><select id="sc-grado"><option value="">— Grado —</option><option>Lic.</option><option>Ing.</option><option>M.C.</option><option>M.S.</option><option>Dr.</option><option>Dra.</option><option>Posdoctorante</option><option>Académico</option></select></div>
               <div class="field"><label>Matrícula UV<span class="req">*</span></label><input type="text" id="sc-matricula" placeholder="S23XXXXXX"/></div>
               <div class="field col2"><label>Correo institucional<span class="req">*</span></label><input type="email" id="sc-correo" placeholder="s23xxx@estudiantes.uv.mx"/></div>
               <div class="field col2"><label>Director(a) de tesis</label><input type="text" id="sc-director" placeholder="Dr./Dra. Nombre Completo"/></div>
@@ -706,7 +775,7 @@ tbody td{padding:9px 12px;font-size:.8rem;vertical-align:middle}
               <div class="field"><label>Nombre(s)<span class="req">*</span></label><input type="text" id="pr-nombres" placeholder="Alejandro"/></div>
               <div class="field"><label>Matrícula UV <span class="hint-tag">[Matrícula]</span><span class="req">*</span></label><input type="text" id="pr-matricula" placeholder="S23XXXXXX"/></div>
               <div class="field"><label>Correo institucional</label><input type="email" id="pr-correo" placeholder="s23xxx@estudiantes.uv.mx"/></div>
-              <div class="field col2"><label>Programa académico</label><select id="pr-programa"><option value="">— Seleccione —</option><option>Maestría en Ciencias Biológicas</option><option>Maestría en Ecología y Manejo de Recursos</option><option>Doctorado en Ciencias Biológicas y Agropecuarias</option><option>Doctorado en Ecología Tropical</option><option>Otro</option></select></div>
+              <div class="field col2"><label>Programa académico</label><select id="pr-programa"><option value="">— Seleccione —</option><optgroup label="Posgrado"><option>Maestría en Ciencias Biológicas</option><option>Maestría en Ecología y Manejo de Recursos</option><option>Doctorado en Ciencias Biológicas y Agropecuarias</option><option>Doctorado en Ecología Tropical</option></optgroup><optgroup label="Categoría"><option>Académico</option><option>Posdoctorante</option><option>Técnico Académico</option></optgroup><optgroup label="Otro"><option>Otro</option></optgroup></select></div>
             </div></div></div>
             <div class="section-block"><div class="section-head"><span class="section-tag" style="background:var(--orange)">02</span><h4>Datos de la Petición de Recursos</h4></div><div class="section-body"><div class="fields">
               <div class="field full"><label>Actividad académica <span class="hint-tag">[Actividad]</span><span class="req">*</span></label><input type="text" id="pr-actividad" placeholder="Nombre de la actividad para la que se solicitan los recursos…"/></div>
@@ -754,7 +823,7 @@ tbody td{padding:9px 12px;font-size:.8rem;vertical-align:middle}
               <div class="field"><label>Nombre(s)<span class="req">*</span></label><input type="text" id="oe-nombres" placeholder="Alejandro"/></div>
               <div class="field"><label>Matrícula UV<span class="req">*</span></label><input type="text" id="oe-matricula" placeholder="S23XXXXXX"/></div>
               <div class="field"><label>Correo institucional</label><input type="email" id="oe-correo" placeholder="s23xxx@estudiantes.uv.mx"/></div>
-              <div class="field col2"><label>Programa académico</label><select id="oe-programa"><option value="">— Seleccione —</option><option>Maestría en Ciencias Biológicas</option><option>Maestría en Ecología y Manejo de Recursos</option><option>Doctorado en Ciencias Biológicas y Agropecuarias</option><option>Doctorado en Ecología Tropical</option><option>Otro</option></select></div>
+              <div class="field col2"><label>Programa académico</label><select id="oe-programa"><option value="">— Seleccione —</option><optgroup label="Posgrado"><option>Maestría en Ciencias Biológicas</option><option>Maestría en Ecología y Manejo de Recursos</option><option>Doctorado en Ciencias Biológicas y Agropecuarias</option><option>Doctorado en Ecología Tropical</option></optgroup><optgroup label="Categoría"><option>Académico</option><option>Posdoctorante</option><option>Técnico Académico</option></optgroup><optgroup label="Otro"><option>Otro</option></optgroup></select></div>
             </div></div></div>
             <div class="section-block"><div class="section-head"><span class="section-tag" style="background:var(--blue)">02</span><h4>Datos del Evento Académico</h4></div><div class="section-body"><div class="fields">
               <div class="field full"><label>Nombre del evento <span class="hint-tag">[Evento]</span><span class="req">*</span></label><input type="text" id="oe-nombre" placeholder="Título del congreso, simposio, taller, seminario…"/></div>
@@ -868,7 +937,7 @@ tbody td{padding:9px 12px;font-size:.8rem;vertical-align:middle}
           </div>
           <div class="fields">
             <div class="field full"><label>URL del Web App (Google Apps Script)<span class="req">*</span></label>
-              <input type="text" id="cfg-gas-url" placeholder="https://script.google.com/macros/s/AKfycbyzZNNeU8pLqRpmKwa6xIKHDso_89thYJwWBg8CCLUkIirbg9w3lGoQjI9XK7yLJMpC/exec"/>
+              <input type="text" id="cfg-gas-url" placeholder="https://script.google.com/macros/s/XXXX/exec"/>
               <span class="field-hint">Obtiene esta URL al desplegar el script CITRO_Backend.gs como Web App</span>
             </div>
             <div class="field full"><label>Token secreto compartido<span class="req">*</span></label>
@@ -953,123 +1022,128 @@ const TYPE_COLORS   = {pg:'var(--purple)',sc:'var(--green)',pr:'var(--orange)',o
 const TYPE_ICONS    = {pg:'📩',sc:'🌿',pr:'📦',oe:'🎓'};
 
 // ============================================================
-//  GOOGLE SIGN-IN
+//  AUTENTICACION POR CORREO (sin OAuth)
 // ============================================================
-const GOOGLE_CLIENT_ID = cfg.googleClientId || 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+const ADMIN_LIST = [
+  'carlolopez@uv.mx',
+  'jcfaicus@gmail.com',
+  'citroct7@gmail.com'
+];
 
-function initGoogleSignIn() {
-  if(typeof google === 'undefined') {
-    setTimeout(initGoogleSignIn, 800);
-    return;
-  }
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: handleCredentialResponse,
-    auto_select: false,
-    cancel_on_tap_outside: false,
-  });
-  google.accounts.id.renderButton(
-    document.getElementById('google-btn-wrap'), {
-      theme:'filled_black', size:'large', text:'signin_with',
-      shape:'rectangular', locale:'es', width:320
-    }
-  );
-  // Try auto-login if previous session
-  const savedUser = sessionStorage.getItem('citro_user');
-  if(savedUser) {
-    try { finishLogin(JSON.parse(savedUser)); } catch{}
-  }
+function isAdminEmail(email) {
+  return ADMIN_LIST.indexOf((email || '').toLowerCase().trim()) >= 0;
 }
 
-function handleCredentialResponse(response) {
-  // Decode JWT payload (public, not secret)
-  const [,payload] = response.credential.split('.');
-  const decoded = JSON.parse(atob(payload.replace(/-/g,'+').replace(/_/g,'/')));
-  const user = {
-    email:   decoded.email,
-    name:    decoded.name || decoded.email,
-    picture: decoded.picture || '',
-    token:   response.credential,
-    isAdmin: false,
+function isValidEmail(email) {
+  var e = (email || '').toLowerCase().trim();
+  // Admins: any domain
+  if(isAdminEmail(e)) return true;
+  // General users: @uv.mx or @estudiantes.uv.mx
+  return e.endsWith('@uv.mx') || e.endsWith('@estudiantes.uv.mx') || e.endsWith('@postdoc.uv.mx');
+}
+
+function doEmailLogin() {
+  var email  = (document.getElementById('login-email').value  || '').trim().toLowerCase();
+  var nombre = (document.getElementById('login-nombre').value || '').trim();
+  var errEl  = document.getElementById('loginError');
+
+  if(!nombre) {
+    errEl.style.display = 'block';
+    errEl.textContent = 'Por favor ingrese su nombre completo.';
+    document.getElementById('login-nombre').focus();
+    return;
+  }
+  if(!email) {
+    errEl.style.display = 'block';
+    errEl.textContent = 'Por favor ingrese su correo.';
+    document.getElementById('login-email').focus();
+    return;
+  }
+  if(!isValidEmail(email)) {
+    errEl.style.display = 'block';
+    errEl.textContent = 'Solo se permite acceso con correos @uv.mx, @estudiantes.uv.mx o los administradores autorizados.';
+    return;
+  }
+  errEl.style.display = 'none';
+
+  var user = {
+    email:   email,
+    name:    nombre,
+    picture: '',
+    isAdmin: isAdminEmail(email),
   };
   sessionStorage.setItem('citro_user', JSON.stringify(user));
-  // Check admin status via GAS
-  checkAdminStatus(user);
+  finishLogin(user);
 }
 
-async function checkAdminStatus(user) {
-  const gasUrl = cfg.gasUrl || DEFAULT_GAS_URL;
-  const secret = cfg.secret || DEFAULT_SECRET;
-
-  if(!gasUrl) {
-    user.isAdmin = false;
-    finishLogin(user);
-    return;
+function initGoogleSignIn() {
+  // Restaurar sesion guardada si existe
+  var savedUser = sessionStorage.getItem('citro_user');
+  if(savedUser) {
+    try { finishLogin(JSON.parse(savedUser)); } catch(e) {}
   }
-
-  try {
-    const r = await fetch(`${gasUrl}?action=tramites&email=${encodeURIComponent(user.email)}&secret=${encodeURIComponent(secret)}`);
-    const j = await r.json();
-    user.isAdmin = j.ok !== false; // If access granted -> admin
-    if(user.isAdmin) isOnline = true;
-  } catch {
-    user.isAdmin = false;
-  }
-  finishLogin(user);
 }
 
 function finishLogin(user) {
   currentUser = user;
   sessionStorage.setItem('citro_user', JSON.stringify(user));
 
-  // Hide overlay
   document.getElementById('loginOverlay').classList.add('hide');
 
-  // Update topbar
-  const chip = document.getElementById('userChip');
+  var chip = document.getElementById('userChip');
   chip.style.display = 'flex';
   document.getElementById('userName').textContent = user.name.split(' ')[0];
   document.getElementById('sb-user-status').textContent = user.email;
 
-  const av = document.getElementById('userAvatar');
-  if(user.picture) av.innerHTML = `<img src="${user.picture}" alt=""/>`;
-  else av.textContent = user.name.charAt(0).toUpperCase();
+  var av = document.getElementById('userAvatar');
+  av.textContent = user.name.charAt(0).toUpperCase();
 
   if(user.isAdmin) {
     document.getElementById('userAdminBadge').style.display = 'inline';
-    document.querySelectorAll('.admin-only').forEach(el => el.classList.add('show'));
+    document.querySelectorAll('.admin-only').forEach(function(el){ el.classList.add('show'); });
     document.getElementById('sb-admin-section').classList.add('show');
-    setSyncStatus('on', `Conectado como admin  -  ${user.email}`);
+    setSyncStatus('on', 'Admin: ' + user.email);
   } else {
-    setSyncStatus(isOnline ? 'on' : 'off', isOnline ? `Conectado  -  ${user.email}` : `Sin Drive  -  ${user.email}`);
+    setSyncStatus(isOnline ? 'on' : 'off', isOnline ? ('Conectado - ' + user.email) : ('Sin Drive - ' + user.email));
   }
+
+  // Pre-fill correo fields with logged-in email
+  ['pg-correo','sc-correo','pr-correo','oe-correo'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el && !el.value) el.value = user.email;
+  });
 
   updateAllCounters();
   renderDashboard();
 }
 
 function loginOffline() {
+  document.getElementById('loginError').style.display = 'none';
   document.getElementById('loginOverlay').classList.add('hide');
-  setSyncStatus('off', 'Sin Drive - datos solo locales');
-  document.getElementById('sb-user-status').textContent = 'Sin sesión Google';
+  setSyncStatus('off', 'Sin sesion - modo local');
+  document.getElementById('sb-user-status').textContent = 'Sin sesion';
   updateAllCounters();
   renderDashboard();
 }
 
 function logout() {
-  if(!confirm('¿Cerrar sesión?')) return;
+  if(!confirm('Cerrar sesion?')) return;
   currentUser = null;
   sessionStorage.removeItem('citro_user');
   document.getElementById('userChip').style.display = 'none';
   document.getElementById('userAdminBadge').style.display = 'none';
-  document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('show'));
-  setSyncStatus('off', 'Sin conexión');
+  document.querySelectorAll('.admin-only').forEach(function(el){ el.classList.remove('show'); });
+  // Clear login form
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-nombre').value = '';
+  document.getElementById('loginError').style.display = 'none';
+  setSyncStatus('off', 'Sin conexion');
   document.getElementById('loginOverlay').classList.remove('hide');
 }
 
 function setSyncStatus(state, label) {
-  const dot  = document.getElementById('syncDot');
-  const lbl  = document.getElementById('syncLabel');
+  var dot = document.getElementById('syncDot');
+  var lbl = document.getElementById('syncLabel');
   dot.className = 'sync-dot ' + state;
   lbl.textContent = label;
 }
@@ -1299,168 +1373,366 @@ function removeFile(type, idx){
 // ============================================================
 //  EMAIL  (via GAS backend o mailto fallback)
 // ============================================================
-var CITRO_EMAIL = '5f11d725.uvmx.onmicrosoft.com@amer.teams.ms';
+var CITRO_EMAIL = 'CtTramites2026@uvmx.onmicrosoft.com';
 
 function buildEmailBody(record, type){
-  var lines=[
-    'CITRO - ACUSE DE TRAMITE',
-    '========================',
-    'Folio: '+record.folio,
-    'Tipo: '+record.label,
-    'Solicitante: '+record.apellidos+', '+record.nombres,
-    'Matricula: '+record.matricula,
-    'Correo: '+(record.correo||''),
-    'Fecha de registro: '+new Date(record.fecha).toLocaleString('es-MX'),
+  var sep = '================================================';
+  var lines = [
+    sep,
+    '  SOLICITUD CITRO / Universidad Veracruzana',
+    sep,
+    '',
+    'Folio:         ' + record.folio,
+    'Tipo:          ' + record.label,
+    'Solicitante:   ' + record.apellidos + ', ' + record.nombres,
+    'Matricula UV:  ' + record.matricula,
+    'Correo:        ' + (record.correo || ''),
+    'Fecha:         ' + new Date(record.fecha).toLocaleString('es-MX'),
+    '',
+    '--- CONTENIDO DE LA SOLICITUD ---',
     '',
   ];
-  if(type==='pg') lines.push('Tipo peticion: '+(record.tipo||''),'Urgencia: '+(record.urgencia||''),'Descripcion:',record.descripcion||'');
-  else if(type==='sc') lines.push('Lugares: '+(record.lugares||''),'Actividades: '+(record.actividades||''),'Fecha salida: '+(record.fecha_salida||''),'Fecha regreso: '+(record.fecha_regreso||''));
-  else if(type==='pr') lines.push('Actividad: '+(record.actividad||''),'Justificacion: '+(record.justificacion||''),'Tipo recurso: '+(record.tipo_recurso||''),'Monto: '+(record.monto||''));
-  else if(type==='oe') lines.push('Evento: '+(record.nombre_evento||''),'Fecha: '+(record.fecha_evento||''),'Sede: '+(record.sede||''),'Presupuesto: '+(record.presupuesto||''),'Asistentes: '+(record.asistentes||''));
-  lines.push('','---','CITRO-Formularios v3.0 | Universidad Veracruzana');
+  if(type==='pg'){
+    lines.push('Tipo de peticion: '+(record.tipo||''));
+    lines.push('Urgencia:         '+(record.urgencia||''));
+    lines.push('');
+    lines.push('Descripcion:');
+    lines.push(record.descripcion||'');
+    if(record.obs){ lines.push(''); lines.push('Observaciones: '+record.obs); }
+  } else if(type==='sc'){
+    lines.push('Grado:            '+(record.grado||''));
+    lines.push('Director:         '+(record.director||''));
+    lines.push('');
+    lines.push('Lugar(es):');
+    lines.push(record.lugares||'');
+    lines.push('');
+    lines.push('Actividades:');
+    lines.push(record.actividades||'');
+    lines.push('');
+    lines.push('Fecha de salida:  '+(record.fecha_salida||''));
+    lines.push('Fecha de regreso: '+(record.fecha_regreso||''));
+    if(record.participantes){ lines.push('Participantes:    '+record.participantes); }
+    if(record.transporte)   { lines.push('Transporte:       '+record.transporte); }
+  } else if(type==='pr'){
+    lines.push('Actividad:        '+(record.actividad||''));
+    lines.push('Tipo de recurso:  '+(record.tipo_recurso||''));
+    if(record.monto){ lines.push('Monto estimado:   $'+parseFloat(record.monto||0).toLocaleString('es-MX',{minimumFractionDigits:2})+' MXN'); }
+    if(record.proyecto){ lines.push('Proyecto/Cuenta:  '+record.proyecto); }
+    lines.push('');
+    lines.push('Justificacion:');
+    lines.push(record.justificacion||'');
+  } else if(type==='oe'){
+    lines.push('Evento:      '+(record.nombre_evento||''));
+    lines.push('Fecha:       '+(record.fecha_evento||''));
+    lines.push('Sede:        '+(record.sede||''));
+    lines.push('Presupuesto: $'+parseFloat(record.presupuesto||0).toLocaleString('es-MX',{minimumFractionDigits:2})+' MXN');
+    lines.push('Asistentes:  '+(record.asistentes||''));
+    lines.push('Proyecto:    '+(record.proyecto||''));
+    lines.push('');
+    lines.push('LGAC/PLADEA:');
+    lines.push(record.lgac||'');
+  }
+  lines.push('', sep);
+  lines.push('CITRO-Formularios v4 | Universidad Veracruzana');
+  lines.push(sep);
   return lines.join('\n');
 }
 
-function buildPrintHTML(record, type){
-  var today=new Date().toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'});
-  var folio=record.folio;
-  var TYPE_COLORS_HEX={pg:'#5B2F8A',sc:'#1A7A4A',pr:'#B85C0A',oe:'#1B5FA8'};
-  var color=TYPE_COLORS_HEX[type]||'#0A7A6E';
-  var header='<div style="text-align:center;border-bottom:2px solid #0D1F3C;padding-bottom:12px;margin-bottom:16px"><div style="font-size:9pt;text-transform:uppercase;letter-spacing:.1em;color:#5A6880">Centro de Investigaciones Tropicales</div><div style="font-size:16pt;font-weight:bold;color:#0D1F3C">UNIVERSIDAD VERACRUZANA</div><div style="font-size:9pt;color:#5A6880">'+(cfg.inst||'')+' - Xalapa, Veracruz - '+today+'</div></div>';
-  var firma='<div style="margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:32px"><div style="text-align:center"><div style="border-top:1px solid #333;padding-top:6px;font-size:9pt">Firma del solicitante<br><span style="color:#5A6880">'+record.apellidos+', '+record.nombres+' - '+record.matricula+'</span></div></div><div style="text-align:center"><div style="border-top:1px solid #333;padding-top:6px;font-size:9pt">Vo.Bo. Direccion CITRO'+(cfg.director?'<br><span style="color:#5A6880">'+cfg.director+'</span>':'')+'</div></div></div><div style="margin-top:16px;text-align:center;font-size:8pt;color:#9AA5B4;border-top:1px solid #eee;padding-top:8px">CITRO-Formularios v3.0 - Folio <strong style="color:'+color+'">'+folio+'</strong></div>';
-  var body='';
-  if(type==='pg') body='<p><strong>Tipo:</strong> '+(record.tipo||'')+'</p><p><strong>Urgencia:</strong> '+(record.urgencia||'')+'</p><p><strong>Descripcion:</strong></p><p>'+(record.descripcion||'')+'</p>'+(record.obs?'<p><strong>Observaciones:</strong> '+record.obs+'</p>':'')+(record.adjuntos?'<p><strong>Adjuntos:</strong> '+record.adjuntos+'</p>':'');
-  else if(type==='sc') body='<p><strong>Lugar(es):</strong></p><p>'+(record.lugares||'')+'</p><p><strong>Actividades:</strong></p><p>'+(record.actividades||'')+'</p><p><strong>Fecha:</strong> '+(record.fecha_salida||'')+' al '+(record.fecha_regreso||'')+'</p>'+(record.participantes?'<p><strong>Participantes:</strong> '+record.participantes+'</p>':'')+(record.transporte?'<p><strong>Transporte:</strong> '+record.transporte+'</p>':'');
-  else if(type==='pr') body='<p><strong>Actividad:</strong> '+(record.actividad||'')+'</p><p><strong>Justificacion:</strong></p><p>'+(record.justificacion||'')+'</p><p><strong>Tipo de recurso:</strong> '+(record.tipo_recurso||'')+'</p>'+(record.monto?'<p><strong>Monto:</strong> $'+parseFloat(record.monto||0).toLocaleString('es-MX',{minimumFractionDigits:2})+' MXN</p>':'')+(record.proyecto?'<p><strong>Proyecto:</strong> '+record.proyecto+'</p>':'');
-  else if(type==='oe') body='<p><strong>Evento:</strong> '+(record.nombre_evento||'')+'</p><p><strong>Fecha y sede:</strong> '+(record.fecha_evento||'')+' - '+(record.sede||'')+'</p><p><strong>Presupuesto:</strong> $'+parseFloat(record.presupuesto||0).toLocaleString('es-MX',{minimumFractionDigits:2})+' MXN</p><p><strong>Asistentes:</strong> '+(record.asistentes||'')+'</p><p><strong>Proyecto:</strong> '+(record.proyecto||'')+'</p><p><strong>LGAC/PLADEA:</strong></p><p>'+(record.lgac||'')+'</p>';
-  return '<!doctype html><html><head><meta charset="utf-8"><title>CITRO - '+folio+'</title><style>body{font-family:"Times New Roman",serif;font-size:12pt;line-height:1.65;margin:2cm;color:#111}p{margin-bottom:8px}@media print{body{margin:1.5cm}}</style></head><body>'+header+'<div style="text-align:right;margin-bottom:16px"><span style="font-family:monospace;background:#f2f5fa;padding:4px 10px;border-radius:4px;font-size:10pt;color:'+color+'">Folio: '+folio+'</span></div><p><strong>Asunto:</strong> '+record.label+'</p><p>A quien corresponda:</p><p>Yo, <strong>'+(record.grado?record.grado+' ':'')+record.apellidos+', '+record.nombres+'</strong>, con matricula <strong>'+record.matricula+'</strong>'+(record.programa?', estudiante del programa de <strong>'+record.programa+'</strong>':'')+', solicito respetuosamente:</p>'+body+'<p style="margin-top:12px">Atentamente,<br><strong>'+record.apellidos+', '+record.nombres+'</strong></p>'+firma+'</body></html>';
+// Texto del acuse para el solicitante
+function buildAcuseBody(record, files){
+  var sep = '================================================';
+  var lines = [
+    sep,
+    '  ACUSE DE RECIBO - SOLICITUD REGISTRADA',
+    '  CITRO / Universidad Veracruzana',
+    sep,
+    '',
+    'Su solicitud ha sido registrada exitosamente.',
+    '',
+    'Folio asignado:  ' + record.folio,
+    'Tipo:            ' + record.label,
+    'Solicitante:     ' + record.apellidos + ', ' + record.nombres,
+    'Matricula UV:    ' + record.matricula,
+    'Fecha:           ' + new Date(record.fecha).toLocaleString('es-MX'),
+    '',
+  ];
+  if(files && files.length){
+    lines.push('Archivos adjuntos (' + files.length + '):');
+    files.forEach(function(f,i){ lines.push('  ' + (i+1) + '. ' + f.name + ' (' + fmtSize(f.size) + ')'); });
+    lines.push('');
+  }
+  lines.push('IMPORTANTE:');
+  lines.push('Este correo es su comprobante de registro.');
+  lines.push('Conserve el numero de folio: ' + record.folio);
+  lines.push('La coordinacion CITRO procesara su solicitud en los proximos dias habiles.');
+  lines.push('');
+  lines.push(sep);
+  lines.push('CITRO-Formularios v4 | Universidad Veracruzana');
+  lines.push('Centro de Investigaciones Tropicales');
+  lines.push(sep);
+  return lines.join('\n');
 }
 
-async function sendEmailWithAttachments(record, type, files){
-  var gasUrl=cfg.gasUrl||DEFAULT_GAS_URL;
-  var secret=cfg.secret||DEFAULT_SECRET;
+// Dispara correo a CtTramites con CC al solicitante (un solo mailto)
+function abrirCorreoCompleto(record, type, files){
+  var subject = '[CITRO] ' + record.label + ' - Folio ' + record.folio + ' - ' + record.apellidos + ', ' + record.nombres;
+  var body = buildEmailBody(record, type);
 
-  // If GAS configured: send via backend (supports attachments as base64)
-  if(gasUrl){
-    try{
-      var attachData=[];
-      for(var i=0;i<files.length;i++){
-        var f=files[i];
-        var b64=await new Promise(function(res,rej){
-          var r=new FileReader();
-          r.onload=function(e){ res(e.target.result.split(',')[1]); };
-          r.onerror=function(){ res(''); };
-          r.readAsDataURL(f);
-        });
-        attachData.push({name:f.name,type:f.type,data:b64});
-      }
-      var printHtml=buildPrintHTML(record,type);
-      var payload={
-        action:'sendEmail',secret:secret,
-        to:CITRO_EMAIL,
-        folio:record.folio,tipo:record.label,
-        solicitante:record.apellidos+', '+record.nombres,
-        matricula:record.matricula,correo:record.correo||'',
-        body:buildEmailBody(record,type),
-        printHtml:printHtml,
-        attachments:attachData
-      };
-      var resp=await fetch(gasUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      var j=await resp.json();
-      if(j.ok) return {ok:true,via:'GAS'};
-      // If GAS fails, fall through to mailto
-    }catch(e){}
+  if(files && files.length){
+    body += '\n\n--- ARCHIVOS ADJUNTOS (' + files.length + ') ---\n';
+    files.forEach(function(f,i){ body += '  ' + (i+1) + '. ' + f.name + ' (' + fmtSize(f.size) + ')\n'; });
+    body += '\n[Adjunte el archivo ' + record.folio + '_CITRO.zip descargado del sistema]';
   }
 
-  // Fallback: mailto (sin adjuntos binarios - notifica al usuario)
-  var subject='[CITRO] '+record.label+' - Folio '+record.folio+' - '+record.apellidos;
-  var bodyText=buildEmailBody(record,type);
-  if(files.length>0){
-    bodyText+='\n\nARCHIVOS ADJUNTOS ('+files.length+'):\n';
-    files.forEach(function(f){ bodyText+='  - '+f.name+' ('+fmtSize(f.size)+')\n'; });
-    bodyText+='\n[NOTA: Por limitaciones del cliente de correo, adjunte manualmente los archivos listados.]';
-  }
-  var mailtoUrl='mailto:'+CITRO_EMAIL+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(bodyText);
-  window.open(mailtoUrl,'_blank');
-  return {ok:true,via:'mailto'};
+  var url = 'mailto:' + encodeURIComponent(CITRO_EMAIL);
+  url += '?subject=' + encodeURIComponent(subject);
+  url += '&body=' + encodeURIComponent(body);
+  if(record.correo){ url += '&cc=' + encodeURIComponent(record.correo); }
+
+  window.open(url, '_blank');
+}
+
+// Abre correo de acuse SOLO al solicitante
+function abrirAcuseSolicitante(record, files){
+  if(!record.correo){ alert('No hay correo del solicitante en esta solicitud.'); return; }
+  var subject = '[CITRO] Acuse de recibo - Folio ' + record.folio;
+  var body = buildAcuseBody(record, files);
+  var url = 'mailto:' + encodeURIComponent(record.correo)
+          + '?subject=' + encodeURIComponent(subject)
+          + '&body=' + encodeURIComponent(body);
+  window.open(url, '_blank');
 }
 
 // ============================================================
-//  ACUSE DE RECIBO
+//  ACUSE DE RECIBO + ZIP + CORREOS
 // ============================================================
-var _lastAcuseType='pg';
+var _lastAcuseType   = 'pg';
+var _lastAcuseRecord = null;
+var _lastAcuseFiles  = [];
 
-function showAcuse(record, type, files, via){
-  _lastAcuseType=type;
-  document.getElementById('acuse-folio-num').textContent=record.folio;
-  document.getElementById('acuse-tipo').textContent=record.label;
-  document.getElementById('acuse-solicitante').textContent=record.apellidos+', '+record.nombres;
-  document.getElementById('acuse-matricula').textContent=record.matricula;
-  document.getElementById('acuse-fecha').textContent=new Date(record.fecha).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+function showAcuse(record, type, files, emailStatus) {
+  _lastAcuseType   = type;
+  _lastAcuseRecord = record;
+  _lastAcuseFiles  = files || [];
+
+  // Datos principales
+  document.getElementById('acuse-folio-num').textContent   = record.folio;
+  document.getElementById('acuse-tipo').textContent        = record.label;
+  document.getElementById('acuse-solicitante').textContent = record.apellidos + ', ' + record.nombres;
+  document.getElementById('acuse-matricula').textContent   = record.matricula;
+  document.getElementById('acuse-fecha').textContent = new Date(record.fecha)
+    .toLocaleString('es-MX', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+
+  // Adjuntos
+  var adjBox = document.getElementById('acuse-adj-box');
   if(files.length){
-    document.getElementById('acuse-adjuntos').textContent=files.length+' archivo(s)';
-    var adjBox=document.getElementById('acuse-adj-box');
-    document.getElementById('acuse-adj-lista').innerHTML='<strong>Archivos enviados:</strong><br>'+files.map(function(f){return '&#128196; '+f.name+' ('+fmtSize(f.size)+')';}).join('<br>');
-    adjBox.style.display='flex';
+    document.getElementById('acuse-adjuntos').textContent = files.length + ' archivo(s)';
+    document.getElementById('acuse-adj-lista').innerHTML  =
+      '<strong>En el paquete .zip:</strong><br>' +
+      files.map(function(f){ return '&#128196; ' + f.name + ' (' + fmtSize(f.size) + ')'; }).join('<br>');
+    adjBox.style.display = 'flex';
+    document.getElementById('acuse-zip-desc').innerHTML =
+      'Formulario + <strong>' + files.length + ' adjunto(s)</strong> en un solo archivo.';
   } else {
-    document.getElementById('acuse-adjuntos').textContent='Ninguno';
-    document.getElementById('acuse-adj-box').style.display='none';
+    document.getElementById('acuse-adjuntos').textContent = 'Ninguno';
+    adjBox.style.display = 'none';
+    document.getElementById('acuse-zip-desc').innerHTML = 'Formulario completo listo para imprimir.';
   }
-  var now=new Date();
-  document.getElementById('acuse-ts').textContent='Registrado: '+now.toLocaleDateString('es-MX')+'  '+now.toLocaleTimeString('es-MX')+'  |  CITRO-Formularios v3.0';
+
+  // Estado de correos
+  var via = emailStatus ? emailStatus.via : 'mailto';
+  _setEmailStatus(
+    'citro',
+    emailStatus && emailStatus.citro,
+    via === 'GAS' ? 'Enviado via servidor' : 'Abrir cliente de correo para enviar',
+    via
+  );
+  _setEmailStatus(
+    'sol',
+    emailStatus && emailStatus.solicitante,
+    via === 'GAS' ? 'Acuse enviado a ' + (record.correo || 'solicitante') : (record.correo || 'Sin correo registrado'),
+    via,
+    record.correo
+  );
+
+  // Solicitante destino label
+  document.getElementById('acuse-st-sol-dest').textContent =
+    record.correo ? record.correo : '(sin correo registrado)';
+
+  // Reset ZIP button
+  var btn = document.getElementById('btn-download-zip');
+  btn.innerHTML = '&#8595; Descargar paquete .zip';
+  btn.disabled = false;
+  btn.style.background = '';
+  document.getElementById('zip-progress').style.display = 'none';
+
+  // Timestamp
+  var now = new Date();
+  document.getElementById('acuse-ts').textContent =
+    'Registrado: ' + now.toLocaleDateString('es-MX') + '  ' + now.toLocaleTimeString('es-MX') + '  |  CITRO v4';
+
   document.getElementById('acuse-overlay').classList.add('show');
 }
 
-function cerrarAcuse(){
+function _setEmailStatus(which, sent, txt, via, dest) {
+  var icoEl  = document.getElementById('acuse-st-' + which + '-ico');
+  var txtEl  = document.getElementById('acuse-st-' + which + '-txt');
+  var rowEl  = document.getElementById('acuse-st-' + which);
+  if(!icoEl) return;
+  if(sent){
+    icoEl.textContent = '\u2713';
+    icoEl.style.color = 'var(--green)';
+    txtEl.textContent = txt;
+    rowEl.style.borderColor = 'rgba(26,122,74,.3)';
+    rowEl.style.background  = 'rgba(26,122,74,.04)';
+  } else {
+    icoEl.innerHTML = via === 'mailto' ? '&#128231;' : '&#9888;';
+    icoEl.style.color = via === 'mailto' ? 'var(--blue)' : 'var(--amber)';
+    txtEl.textContent = txt;
+    rowEl.style.borderColor = via === 'mailto' ? 'rgba(27,95,168,.22)' : 'rgba(232,146,10,.28)';
+    rowEl.style.background  = via === 'mailto' ? 'rgba(27,95,168,.04)' : 'rgba(232,146,10,.04)';
+  }
+}
+
+function cerrarAcuse() {
   document.getElementById('acuse-overlay').classList.remove('show');
 }
 
-function acuseNuevo(){
+function acuseNuevo() {
   cerrarAcuse();
-  // Reset form
   resetForm(_lastAcuseType);
-  attachedFiles[_lastAcuseType]=[];
+  attachedFiles[_lastAcuseType] = [];
   renderAttachList(_lastAcuseType);
-  document.querySelector('.content').scrollTo({top:0,behavior:'smooth'});
+  document.querySelector('.content').scrollTo({top:0, behavior:'smooth'});
 }
 
-function acuseImprimir(){
-  var folio=document.getElementById('acuse-folio-num').textContent;
-  var tipo=document.getElementById('acuse-tipo').textContent;
-  var sol=document.getElementById('acuse-solicitante').textContent;
-  var mat=document.getElementById('acuse-matricula').textContent;
-  var fecha=document.getElementById('acuse-fecha').textContent;
-  var adj=document.getElementById('acuse-adjuntos').textContent;
-  var ts=document.getElementById('acuse-ts').textContent;
-  var w=window.open('','_blank','width=600,height=700');
-  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Acuse - '+folio+'</title><style>body{font-family:Arial,sans-serif;margin:2cm;color:#111;font-size:12pt}h1{color:#0D1F3C;font-size:14pt}.folio{font-size:18pt;font-weight:bold;color:#0A7A6E;text-align:center;border:2px solid #0A7A6E;padding:10px;border-radius:8px;margin:16px 0}.row{display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:8px 0}.lbl{color:#777}.footer{margin-top:32px;font-size:9pt;color:#aaa;text-align:center}@media print{body{margin:1.5cm}}</style></head><body><h1>Acuse de Recibo - CITRO / UV</h1><div class="folio">Folio: '+folio+'</div><div class="row"><span class="lbl">Tipo de tramite</span><strong>'+tipo+'</strong></div><div class="row"><span class="lbl">Solicitante</span><strong>'+sol+'</strong></div><div class="row"><span class="lbl">Matricula UV</span><strong>'+mat+'</strong></div><div class="row"><span class="lbl">Fecha de registro</span><strong>'+fecha+'</strong></div><div class="row"><span class="lbl">Archivos adjuntos</span><strong>'+adj+'</strong></div><div class="row"><span class="lbl">Enviado a</span><strong>CtTramites2026 (Teams)</strong></div><div class="footer">'+ts+'</div></body></html>');
-  w.document.close();
-  setTimeout(function(){ w.print(); },300);
+// Reenviar manualmente
+function manualCorreoCITRO() {
+  if(!_lastAcuseRecord) return;
+  abrirCorreoCompleto(_lastAcuseRecord, _lastAcuseType, _lastAcuseFiles);
 }
+function manualAcuseSolicitante() {
+  if(!_lastAcuseRecord) return;
+  abrirAcuseSolicitante(_lastAcuseRecord, _lastAcuseFiles);
+}
+
+// Imprimir acuse
+function acuseImprimir() {
+  var folio = document.getElementById('acuse-folio-num').textContent;
+  var tipo  = document.getElementById('acuse-tipo').textContent;
+  var sol   = document.getElementById('acuse-solicitante').textContent;
+  var mat   = document.getElementById('acuse-matricula').textContent;
+  var fecha = document.getElementById('acuse-fecha').textContent;
+  var adj   = document.getElementById('acuse-adjuntos').textContent;
+  var ts    = document.getElementById('acuse-ts').textContent;
+  var correo = _lastAcuseRecord ? (_lastAcuseRecord.correo || '') : '';
+  var adjList = _lastAcuseFiles.map(function(f){
+    return '<li>' + f.name + ' <span style="color:#aaa">(' + fmtSize(f.size) + ')</span></li>';
+  }).join('');
+
+  var w = window.open('','_blank','width=620,height=760');
+  w.document.write(
+    '<!doctype html><html><head><meta charset="utf-8"><title>Acuse - ' + folio + '</title>' +
+    '<style>body{font-family:Arial,sans-serif;margin:1.8cm;color:#111;font-size:11pt}' +
+    'h1{color:#0D1F3C;font-size:13pt;border-bottom:2px solid #0D1F3C;padding-bottom:6px}' +
+    '.folio{font-size:20pt;font-weight:bold;color:#0A7A6E;text-align:center;' +
+    'border:2px solid #0A7A6E;padding:10px;border-radius:8px;margin:14px 0;letter-spacing:.04em}' +
+    '.row{display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:7px 0}' +
+    '.lbl{color:#777;font-size:.9em}.val{font-weight:600}' +
+    '.note{margin-top:16px;background:#f0faf8;border:1px solid #0A7A6E;border-radius:6px;' +
+    'padding:10px;font-size:.85em;color:#0A7A6E;line-height:1.55}' +
+    '.footer{margin-top:24px;font-size:8pt;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:10px}' +
+    '@media print{body{margin:1.2cm}}</style></head><body>' +
+    '<h1>Acuse de Recibo - CITRO / UV</h1>' +
+    '<div class="folio">Folio: ' + folio + '</div>' +
+    '<div class="row"><span class="lbl">Tipo de tramite</span><span class="val">' + tipo + '</span></div>' +
+    '<div class="row"><span class="lbl">Solicitante</span><span class="val">' + sol + '</span></div>' +
+    '<div class="row"><span class="lbl">Matricula UV</span><span class="val">' + mat + '</span></div>' +
+    '<div class="row"><span class="lbl">Correo</span><span class="val">' + correo + '</span></div>' +
+    '<div class="row"><span class="lbl">Fecha de registro</span><span class="val">' + fecha + '</span></div>' +
+    '<div class="row"><span class="lbl">Archivos adjuntos</span><span class="val">' + adj + '</span></div>' +
+    (adjList ? '<ul style="margin:6px 0 0 16px;font-size:.85em;color:#444">' + adjList + '</ul>' : '') +
+    '<div class="row"><span class="lbl">Destino</span><span class="val">CtTramites2026@uvmx.onmicrosoft.com</span></div>' +
+    '<div class="note">&#10003; Solicitud registrada en el sistema CITRO.<br>' +
+    'Conserve este folio como comprobante: <strong>' + folio + '</strong><br>' +
+    'La coordinacion procesara su solicitud en los proximos dias habiles.</div>' +
+    '<div class="footer">' + ts + '</div>' +
+    '</body></html>'
+  );
+  w.document.close();
+  setTimeout(function(){ w.print(); }, 300);
+}
+
+// Descarga ZIP
+async function descargarPaqueteZip() {
+  if(!_lastAcuseRecord) return;
+  var btn  = document.getElementById('btn-download-zip');
+  var prog = document.getElementById('zip-progress');
+  btn.disabled = true;
+  btn.innerHTML = 'Generando...';
+  prog.style.display = 'block';
+  prog.textContent   = 'Preparando paquete...';
+
+  try {
+    var zip     = new JSZip();
+    var record  = _lastAcuseRecord;
+    var files   = _lastAcuseFiles;
+    var folio   = record.folio;
+    var carpeta = folio + '_' + record.apellidos.split(' ')[0];
+
+    // Formulario oficial HTML
+    zip.file(carpeta + '/' + folio + '_formulario.html', buildPrintHTML(record, _lastAcuseType));
+
+    // Acuse de recibo TXT
+    zip.file(carpeta + '/' + folio + '_acuse.txt', buildAcuseBody(record, files));
+
+    // Adjuntos del usuario
+    for(var i = 0; i < files.length; i++){
+      prog.textContent = 'Empaquetando adjunto ' + (i+1) + ' de ' + files.length + '...';
+      var ab = await files[i].arrayBuffer();
+      zip.file(carpeta + '/adjuntos/' + files[i].name, ab);
+    }
+
+    prog.textContent = 'Comprimiendo...';
+    var blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url; a.download = folio + '_CITRO.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+
+    btn.innerHTML = '\u2713 Descargado: ' + folio + '_CITRO.zip';
+    btn.style.background = 'var(--green)';
+    prog.textContent = 'Adjunte el .zip al correo a CtTramites2026.';
+
+  } catch(err) {
+    btn.disabled = false;
+    btn.innerHTML = '&#8595; Descargar paquete .zip';
+    prog.textContent = 'Error: ' + err.message;
+  }
+}
+
 
 // ============================================================
-//  SUBMIT (con adjuntos + correo + acuse)
+//  SUBMIT
 // ============================================================
 async function submitForm(type) {
   if(!validate(type)) { showAlert(type,'error','Complete todos los campos obligatorios (*)'); return; }
 
   var btn = document.getElementById('btn-submit-'+type);
   btn.disabled = true;
-  btn.textContent = 'Registrando...';
+  btn.innerHTML = '<span style="animation:spin .8s linear infinite;display:inline-block">&#8635;</span> Registrando...';
 
   var folio  = assignFolio(type);
   var record = buildRecord(type, folio);
   var files  = attachedFiles[type] || [];
 
-  // 1. Sincronizar con Drive / Sheets
+  // 1. Sincronizar con Drive / Sheets (si esta configurado)
   var gasUrl = cfg.gasUrl || DEFAULT_GAS_URL;
-  var driveUrl = '';
   if(gasUrl) {
+    btn.innerHTML = '<span style="animation:spin .8s linear infinite;display:inline-block">&#8635;</span> Guardando en Drive...';
     var result = await syncToDrive(record);
-    if(result.ok) {
-      driveUrl = result.driveUrl || '';
-      record.driveUrl = driveUrl;
-    }
+    if(result.ok) { record.driveUrl = result.driveUrl || ''; }
   }
 
   // 2. Guardar localmente
@@ -1469,15 +1741,52 @@ async function submitForm(type) {
   updateAllCounters();
   updateFolioPreview(type);
 
-  // 3. Enviar correo
-  btn.textContent = 'Enviando correo...';
-  var emailResult = await sendEmailWithAttachments(record, type, files);
+  // 3. Intentar envio GAS (si configurado); si no, se usa mailto desde acuse
+  var emailStatus = {citro: false, solicitante: false, via: 'mailto'};
+  if(gasUrl) {
+    btn.innerHTML = '<span style="animation:spin .8s linear infinite;display:inline-block">&#8635;</span> Enviando correo...';
+    try {
+      var attachData = [];
+      for(var i=0; i<files.length; i++){
+        var f = files[i];
+        var b64 = await new Promise(function(res){
+          var r = new FileReader();
+          r.onload = function(e){ res(e.target.result.split(',')[1]); };
+          r.onerror = function(){ res(''); };
+          r.readAsDataURL(f);
+        });
+        attachData.push({name: f.name, type: f.type, data: b64});
+      }
+      var payload = {
+        action: 'sendEmail', secret: cfg.secret || DEFAULT_SECRET,
+        to: CITRO_EMAIL, cc: record.correo || '',
+        folio: record.folio, tipo: record.label,
+        solicitante: record.apellidos + ', ' + record.nombres,
+        matricula: record.matricula, correo: record.correo || '',
+        body: buildEmailBody(record, type),
+        acuseBody: buildAcuseBody(record, files),
+        printHtml: buildPrintHTML(record, type),
+        attachments: attachData
+      };
+      var resp = await fetch(gasUrl, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      var j = await resp.json();
+      if(j.ok){ emailStatus = {citro: true, solicitante: true, via: 'GAS'}; }
+    } catch(e){ /* fallback to mailto in acuse */ }
+  }
 
-  // 4. Mostrar acuse
+  // 4. Si no hay GAS, abrir mailto automaticamente al terminar
+  if(emailStatus.via !== 'GAS'){
+    // Abrir correo a CtTramites con CC al solicitante
+    abrirCorreoCompleto(record, type, files);
+  }
+
   btn.disabled = false;
-  btn.textContent = '&#8595; Registrar + Enviar';
-  showAcuse(record, type, files, emailResult.via);
+  btn.innerHTML = '&#8595; Registrar + Enviar';
+
+  // 5. Mostrar acuse de recibo
+  showAcuse(record, type, files, emailStatus);
 }
+
 
 function showAlert(type, kind, msg) {
   const el=document.getElementById(type+'-alert');
